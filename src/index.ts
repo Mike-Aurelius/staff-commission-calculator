@@ -14,11 +14,12 @@ function requireEnv(key: string): string {
 
 function getConfig() {
   return {
-    shopifyStoreUrl: requireEnv("SHOPIFY_STORE_URL"),         // e.g. my-store.myshopify.com
-    shopifyAccessToken: requireEnv("SHOPIFY_ACCESS_TOKEN"),   // Admin API access token
+    shopifyStoreUrl: requireEnv("SHOPIFY_STORE_URL"),     // e.g. my-store.myshopify.com
+    shopifyClientId: requireEnv("SHOPIFY_CLIENT_ID"),     // Partner Dashboard app Client ID
+    shopifyClientSecret: requireEnv("SHOPIFY_CLIENT_SECRET"), // Partner Dashboard app Client Secret
     resendApiKey: requireEnv("RESEND_API_KEY"),
-    emailFrom: requireEnv("EMAIL_FROM"),                      // e.g. reports@yourdomain.com
-    emailTo: requireEnv("EMAIL_TO"),                          // Amber's email
+    emailFrom: requireEnv("EMAIL_FROM"),                  // e.g. reports@yourdomain.com
+    emailTo: requireEnv("EMAIL_TO"),                      // Amber's email
   };
 }
 
@@ -34,7 +35,8 @@ async function runCommissionReport(): Promise<void> {
 
   const orders = await fetchOrdersForPeriod(
     config.shopifyStoreUrl,
-    config.shopifyAccessToken,
+    config.shopifyClientId,
+    config.shopifyClientSecret,
     start,
     end
   );
