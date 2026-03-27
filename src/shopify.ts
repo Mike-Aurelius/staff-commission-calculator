@@ -1,83 +1,17 @@
 import { ShopifyOrder, ShopifyOrdersResponse } from "./types";
 
-// ─── OAuth client credentials ─────────────────────────────────────────────────
-
-interface OAuthTokenResponse {
-  access_token: string;
-  expires_in: number; // seconds
-  token_type: string;
-}
-
-interface TokenCache {
-  token: string;
-  expiresAt: number; // ms epoch
-}
-
-let tokenCache: TokenCache | null = null;
-
-/**
- * Exchanges a Partner Dashboard app's Client ID + Client Secret for a
- * short-lived Admin API access token using Shopify's OAuth client
- * credentials grant.
- *
- * The token is cached in memory and automatically refreshed 5 minutes
- * before it expires, so repeated calls within a run are cheap.
- */
-export async function getAccessToken(
-  storeUrl: string,
-  clientId: string,
-  clientSecret: string
-): Promise<string> {
-  const now = Date.now();
-  const refreshBufferMs = 5 * 60 * 1000; // refresh 5 min before expiry
-
-  if (tokenCache && tokenCache.expiresAt - refreshBufferMs > now) {
-    return tokenCache.token;
-  }
-
-  const response = await fetch(
-    `https://${storeUrl}/admin/oauth/access_token`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: "client_credentials",
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Shopify OAuth token exchange failed ${response.status}: ${body}`);
-  }
-
-  const data = (await response.json()) as OAuthTokenResponse;
-  tokenCache = {
-    token: data.access_token,
-    expiresAt: now + data.expires_in * 1000,
-  };
-
-  return tokenCache.token;
-}
-
-// ─── Order fetching ───────────────────────────────────────────────────────────
-
 /**
  * Fetches all paid orders from Shopify for a given date range.
- * Obtains a fresh OAuth token via client credentials before each run,
- * then uses cursor-based pagination to retrieve every order.
+ * Authenticates using a static Admin API access token generated from a
+ * Custom App in the Shopify Admin (Settings → Apps → Develop apps).
+ * Uses cursor-based pagination to retrieve every order regardless of volume.
  */
 export async function fetchOrdersForPeriod(
   storeUrl: string,
-  clientId: string,
-  clientSecret: string,
+  accessToken: string,
   startDate: Date,
   endDate: Date
 ): Promise<ShopifyOrder[]> {
-  const accessToken = await getAccessToken(storeUrl, clientId, clientSecret);
-
   const allOrders: ShopifyOrder[] = [];
   let pageInfo: string | null = null;
   const limit = 250;
@@ -104,16 +38,14 @@ export async function fetchOrdersForPeriod(
 
     const response = await fetch(url, {
       headers: {
-        "Authorization": `Bearer ${accessToken}`,
+        "X-Shopify-Access-Token": accessToken,
         "Content-Type": "application/json",
       },
     });
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(
-        `Shopify API error ${response.status}: ${body}`
-      );
+      throw new Error(`Shopify API error ${response.status}: ${body}`);
     }
 
     const data = (await response.json()) as ShopifyOrdersResponse;
